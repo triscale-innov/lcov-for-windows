@@ -10,7 +10,7 @@
 #   This program is distributed in the hope that it will be useful, but
 #   WITHOUT ANY WARRANTY;  without even the implied warranty of
 #   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-#   General Public License for more details.                 
+#   General Public License for more details.
 #
 #   You should have received a copy of the GNU General Public License
 #   along with this program;  if not, write to the Free Software
@@ -50,7 +50,7 @@
 #
 
 use strict;
-use File::Basename; 
+use File::Basename;
 use File::Spec::Functions qw /abs2rel catdir file_name_is_absolute splitdir
 			      splitpath catpath/;
 use Getopt::Long;
@@ -229,7 +229,7 @@ our $checksum;
 our $no_checksum;
 our $opt_compat_libtool;
 our $opt_no_compat_libtool;
-our $rc_adjust_src_path;# Regexp specifying parts to remove from source path
+our $rc_adjust_src_path; # Regexp specifying parts to remove from source path
 our $adjust_src_pattern;
 our $adjust_src_replace;
 our $adjust_testname;
@@ -538,7 +538,7 @@ else
 {
 	$data_file_extension = ".gcda";
 	$graph_file_extension = ".gcno";
-}	
+}
 
 # Check output filename
 if (defined($output_filename) && ($output_filename ne "-"))
@@ -909,7 +909,7 @@ sub process_dafile($$)
 
 	$source_dir = $da_dir;
 	if (is_compat($COMPAT_MODE_LIBTOOL)) {
-		# Avoid files from .libs dirs 	 
+		# Avoid files from .libs dirs
 		$source_dir =~ s/\.libs$//;
 	}
 
@@ -973,11 +973,11 @@ sub process_dafile($$)
 		{
 			($instr, $graph) = read_bb($bb_filename);
 		}
-	} 
+	}
 	else
 	{
 		($instr, $graph) = read_gcno($bb_filename);
-	} 
+	}
 
 	# Try to find base directory automatically if requested by user
 	if ($rc_auto_base) {
@@ -1015,7 +1015,7 @@ sub process_dafile($$)
 
 	# Change to directory containing data files and apply GCOV
 	debug("chdir($base_dir)\n");
-        chdir($base_dir);
+	chdir($base_dir);
 
 	if ($da_renamed)
 	{
@@ -1354,11 +1354,11 @@ sub solve_relative_path($$)
 			# $uppercase_volume is not used any further
 			( $uppercase_volume, $directories, $filename ) = File::Spec::Win32->splitpath( $dir );
 			@dirs = File::Spec::Win32->splitdir( $directories );
-			
+
 			# prepend volume, since in msys C: is always mounted to /c
 			$volume =~ s|^([a-zA-Z]+):|/\L$1\E|;
 			unshift( @dirs, $volume );
-			
+
 			# transform to Unix style '/' path
 			$directories = File::Spec->catdir( @dirs );
 			$dir = File::Spec->catpath( '', $directories, $filename );
@@ -1403,7 +1403,6 @@ sub solve_relative_path($$)
 # Return a list of those entries of LIST which match the relative filename
 # GCOV_FILENAME.
 #
-
 sub match_filename($@)
 {
 	my ($filename, @list) = @_;
@@ -1449,7 +1448,7 @@ entry:
 # by comparing source code provided in the GCOV file with that of the files
 # in MATCHES. REL_FILENAME identifies the relative filename of the gcov
 # file.
-# 
+#
 # Return the one real match or die if there is none.
 #
 
@@ -1919,7 +1918,7 @@ sub get_gcov_version()
 	# LLVM (http://llvm.org/):
 	#   LLVM version 3.4svn
 
-	$pipe_next_line = <GCOV_PIPE>;	
+	$pipe_next_line = <GCOV_PIPE>;
 	# In case version information is on first line.
 	# For example, with Xcode 7.0 gcov --version yields:
 	# Apple LLVM 7.0.0 (clang-700.0.65)
@@ -2042,7 +2041,7 @@ sub system_no_output($@)
 	# Restore old handles
 	($mode & 1) && open(STDOUT, ">>&", "OLD_STDOUT");
 	($mode & 2) && open(STDERR, ">>&", "OLD_STDERR");
- 
+
 	return $result;
 }
 
@@ -2102,7 +2101,7 @@ sub read_config($)
 #
 # where KEY_STRING is a keyword and VAR_REF is a reference to an associated
 # variable. If the global configuration hashes CONFIG or OPT_RC contain a value
-# for keyword KEY_STRING, VAR_REF will be assigned the value for that keyword. 
+# for keyword KEY_STRING, VAR_REF will be assigned the value for that keyword.
 #
 
 sub apply_config($)
@@ -2290,7 +2289,7 @@ sub process_graphfile($$)
 
 	$source_dir = $graph_dir;
 	if (is_compat($COMPAT_MODE_LIBTOOL)) {
-		# Avoid files from .libs dirs 	 
+		# Avoid files from .libs dirs
 		$source_dir =~ s/\.libs$//;
 	}
 
@@ -2321,7 +2320,7 @@ sub process_graphfile($$)
 		{
 			($instr, $graph) = read_bb($graph_filename);
 		}
-	} 
+	}
 	else
 	{
 		($instr, $graph) = read_gcno($graph_filename);
@@ -3386,7 +3385,7 @@ sub determine_gcno_split_crc($$$)
 # read_gcno_function_record(handle, graph, big_endian, rec_length)
 #
 # Read a gcno format function record from handle and add the relevant data
-# to graph. Return (filename, function) on success, undef on error. 
+# to graph. Return (filename, function) on success, undef on error.
 #
 
 sub read_gcno_function_record(*$$$$)
