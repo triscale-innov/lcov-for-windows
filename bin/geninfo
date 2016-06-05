@@ -47,15 +47,17 @@
 #   2008-07-14 / Tom Zoerner: added --function-coverage command line option
 #   2008-08-13 / Peter Oberparleiter: modified function coverage
 #                implementation (now enabled per default)
+#   2016-05-13 / David Garcin: added windows support
 #
 
 use strict;
 use File::Basename;
 use File::Spec::Functions qw /abs2rel catdir file_name_is_absolute splitdir
 			      splitpath catpath/;
+use File::Find;
 use Getopt::Long;
 use Digest::MD5 qw(md5_base64);
-use Cwd qw/abs_path/;
+use Cwd qw /abs_path getcwd/;
 if( $^O eq "msys" )
 {
 	require File::Spec::Win32;
@@ -259,7 +261,7 @@ our $rc_auto_base = 1;
 our $excl_line = "LCOV_EXCL_LINE";
 our $excl_br_line = "LCOV_EXCL_BR_LINE";
 
-our $cwd = `pwd`;
+our $cwd = getcwd();
 chomp($cwd);
 
 
@@ -474,11 +476,11 @@ if ($base_directory)
 # Check for follow option
 if ($follow)
 {
-	$follow = "-follow"
+	$follow = 1;
 }
 else
 {
-	$follow = "";
+	$follow = 0;
 }
 
 # Determine checksum mode
@@ -496,11 +498,11 @@ else
 # Determine max depth for recursion
 if ($no_recursion)
 {
-	$maxdepth = "-maxdepth 1";
+	$maxdepth = 1;
 }
 else
 {
-	$maxdepth = "";
+	$maxdepth = -1;
 }
 
 # Check for directory name
@@ -657,6 +659,61 @@ sub get_common_prefix($@)
 }
 
 #
+# find_files(directory, maxdepth, follow, ext)
+#
+# Look for files in the selected directory matching an extension.
+#
+# Maxdepth sets the maximum level of directories to descend to.
+# A value of -1 disables this limitation entirely
+#
+# Follow might either be set to 1 to enable or 0 to disable symlinks
+# following.
+#
+sub find_files($$$$)
+{
+    my ($directory, $maxdepth, $follow, $ext) = @_;
+    my @found;
+
+    File::Find::find({
+                        wanted =>
+                        sub {
+                                my $current_fullpath = $File::Find::name;
+                                my $current_file_dir = $File::Find::dir;
+
+                                # Calculate current depth
+                                my $current_relpath = $File::Find::name;
+                                $current_relpath =~ s{^\Q$directory\E/?}{};
+                                my $current_depth = scalar File::Spec->splitdir($current_relpath);
+
+                                if (-d "$current_fullpath")
+                                {
+                                    if (($maxdepth != -1) && ($current_depth >= $maxdepth))
+                                    {
+                                        # Max depth reached, stop descending in directory tree
+                                        $File::Find::prune = 1;
+                                    }
+                                    return;
+                                }
+
+                                if ((! -f $current_fullpath) && (! -l $current_fullpath))
+                                {
+                                    return;
+                                }
+
+                                if (("$current_fullpath" =~ /$ext$/)
+                                    && (($maxdepth == -1) || ($current_depth <= $maxdepth)))
+                                {
+                                    push(@found, "$current_relpath");
+                                }
+                            },
+                        follow => $follow
+                     },
+                     $directory);
+
+    return @found;
+}
+
+#
 # gen_info(directory)
 #
 # Traverse DIRECTORY and create a .info file for each data file found.
@@ -710,7 +767,7 @@ sub gen_info($)
 	{
 		info("Scanning $directory for $ext files ...\n");
 
-		@file_list = `find "$directory" $maxdepth $follow -name \\*$ext -type f -o -name \\*$ext -type l 2>/dev/null`;
+		@file_list = find_files("$directory", $maxdepth, $follow, "$ext");
 		chomp(@file_list);
 		if (!@file_list) {
 			warn("WARNING: no $ext files found in $directory - ".
@@ -996,9 +1053,9 @@ sub process_dafile($$)
 	if ($object_dir ne $da_dir)
 	{
 		# Need to create link to data file in $object_dir
-		system("ln", "-s", $da_filename, 
-		       "$object_dir/$da_basename$data_file_extension")
-			and die ("ERROR: cannot create link $object_dir/".
+		symlink($da_filename,
+		        "$object_dir/$da_basename$data_file_extension")
+			or die ("ERROR: cannot create link $object_dir/".
 				 "$da_basename$data_file_extension!\n");
 		push(@tmp_links,
 		     "$object_dir/$da_basename$data_file_extension");
@@ -2689,48 +2746,46 @@ sub find_base_from_graph($$$)
 }
 
 #
+# adjust_filenames(base_dir, collection)
+#
+# Make relative paths in collection absolute and apply
+# geninfo_adjust_src_path setting to graph file data.
+#
+sub adjust_filenames($$)
+{
+	my ($base_dir, $hash_map) = @_;
+
+	foreach my $filename (keys(%{$hash_map})) {
+		my $old_filename = $filename;
+
+		# Convert to absolute canonical form
+		$filename = solve_relative_path($base_dir, $filename);
+
+		# Apply adjustment
+		if (defined($adjust_src_pattern)) {
+			$filename =~ s/$adjust_src_pattern/$adjust_src_replace/g;
+		}
+
+		if ($filename ne $old_filename) {
+			$hash_map->{$filename} = delete($hash_map->{$old_filename});
+		}
+	}
+
+	return $hash_map;
+}
+
+#
 # adjust_graph_filenames(base_dir, instr, graph)
 #
 # Make relative paths in INSTR and GRAPH absolute and apply
 # geninfo_adjust_src_path setting to graph file data.
 #
-
 sub adjust_graph_filenames($$$)
 {
 	my ($base_dir, $instr, $graph) = @_;
 
-	foreach my $filename (keys(%{$instr})) {
-		my $old_filename = $filename;
-
-		# Convert to absolute canonical form
-		$filename = solve_relative_path($base_dir, $filename);
-
-		# Apply adjustment
-		if (defined($adjust_src_pattern)) {
-			$filename =~ s/$adjust_src_pattern/$adjust_src_replace/g;
-		}
-
-		if ($filename ne $old_filename) {
-			$instr->{$filename} = delete($instr->{$old_filename});
-		}
-	}
-
-	foreach my $filename (keys(%{$graph})) {
-		my $old_filename = $filename;
-
-		# Make absolute
-		# Convert to absolute canonical form
-		$filename = solve_relative_path($base_dir, $filename);
-
-		# Apply adjustment
-		if (defined($adjust_src_pattern)) {
-			$filename =~ s/$adjust_src_pattern/$adjust_src_replace/g;
-		}
-
-		if ($filename ne $old_filename) {
-			$graph->{$filename} = delete($graph->{$old_filename});
-		}
-	}
+	$instr = adjust_filenames($base_dir, $instr);
+	$graph = adjust_filenames($base_dir, $graph);
 
 	return ($instr, $graph);
 }
