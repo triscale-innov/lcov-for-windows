@@ -62,6 +62,7 @@
 #   2008-08-13 / Peter Oberparleiter: modified function coverage
 #                implementation (now enabled per default),
 #                introduced sorting option (enabled per default)
+#   2016-05-13 / David Garcin: added windows support
 #
 
 use strict;
@@ -71,11 +72,22 @@ use Getopt::Long;
 use Digest::MD5 qw(md5_base64);
 use Cwd qw/abs_path/;
 
+our $bash_invoke;
+
+our $dir_separator = "/";
+if ($^O =~ /Win/)
+{
+	$dir_separator = "\\";
+
+	# Windows can't deduce the interpreter from the shebang
+	$bash_invoke = "bash ";
+}
+
 
 # Global constants
 our $title		= "LCOV - code coverage report";
 our $tool_dir		= abs_path(dirname($0));
-our $lcov_version	= 'LCOV version '.`$tool_dir/get_version.sh --full`;
+our $lcov_version	= 'LCOV version '.`$bash_invoke$tool_dir/get_version.sh --full`;
 our $lcov_url		= "http://ltp.sourceforge.net/coverage/lcov.php";
 our $tool_name		= basename($0);
 
@@ -1112,7 +1124,7 @@ sub process_dir($)
 
 	# Match filenames which specify files in this directory, not including
 	# sub-directories
-	foreach $filename (grep(/^\Q$abs_dir\E\/[^\/]*$/,keys(%info_data)))
+	foreach $filename (grep(/^\Q$abs_dir$dir_separator\E[^\Q$dir_separator\E]*$/,keys(%info_data)))
 	{
 		my $page_link;
 		my $func_link;
@@ -2340,7 +2352,7 @@ sub get_prefix($@)
 		$current = $_;
 		while ($current = shorten_prefix($current))
 		{
-			$current .= "/";
+			$current .= $dir_separator;
 
 			# Skip rest if the remaining prefix has already been
 			# added to hash
@@ -2358,7 +2370,7 @@ sub get_prefix($@)
 		my $dir = dirname($filename);
 
 		for (my $i = 0; $i < $min_dir; $i++) {
-			delete($prefix{$dir."/"});
+			delete($prefix{$dir . $dir_separator});
 			$dir = shorten_prefix($dir);
 		}
 	}
@@ -2394,7 +2406,14 @@ sub get_prefix($@)
 		}
 	}
 
-	$current =~ s/\/$//;
+	if ($^O =~ /Win/)
+	{
+		$current =~ s/\\$//;
+	}
+	else
+	{
+		$current =~ s/\/$//;
+	}
 
 	return($current);
 }
@@ -2408,10 +2427,10 @@ sub get_prefix($@)
 
 sub shorten_prefix($)
 {
-	my @list = split("/", $_[0]);
+	my @list = split(/\Q$dir_separator\E/, $_[0]);
 
 	pop(@list);
-	return join("/", @list);
+	return join($dir_separator, @list);
 }
 
 
@@ -5739,7 +5758,7 @@ sub apply_prefix($@)
 	{
 		foreach my $prefix (@dir_prefix)
 		{
-			if ($prefix ne "" && $filename =~ /^\Q$prefix\E\/(.*)$/)
+			if ($prefix ne "" && $filename =~ /^\Q$prefix$dir_separator\E(.*)$/)
 			{
 				return substr($filename, length($prefix) + 1);
 			}

@@ -58,14 +58,27 @@ use File::Find;
 use Getopt::Long;
 use Digest::MD5 qw(md5_base64);
 use Cwd qw /abs_path getcwd/;
-if( $^O eq "msys" )
+
+if (($^O eq "msys") || ($^O =~ /Win/))
 {
 	require File::Spec::Win32;
 }
 
+our $mv_cmd = "mv";
+our $null_redirect = "/dev/null";
+our $bash_invoke;
+if ($^O =~ /Win/)
+{
+	$mv_cmd = "move";
+	$null_redirect = "NUL";
+
+	# Windows can't deduce the interpreter from the shebang
+	$bash_invoke = "bash ";
+}
+
 # Constants
 our $tool_dir		= abs_path(dirname($0));
-our $lcov_version	= 'LCOV version '.`$tool_dir/get_version.sh --full`;
+our $lcov_version	= 'LCOV version '.`$bash_invoke$tool_dir/get_version.sh --full`;
 our $lcov_url		= "http://ltp.sourceforge.net/coverage/lcov.php";
 our $gcov_tool		= "gcov";
 our $tool_name		= basename($0);
@@ -998,7 +1011,16 @@ sub process_dafile($$)
 
 	# Construct name of graph file
 	$bb_basename = $da_basename.$graph_file_extension;
-	$bb_filename = "$da_dir/$bb_basename";
+
+	# Handle native win32 path
+	if ($^O =~ /Win/)
+	{
+		$bb_filename = "$da_dir\\$bb_basename";
+	}
+	else
+	{
+		$bb_filename = "$da_dir/$bb_basename";
+	}
 
 	# Find out the real location of graph file in case we're just looking at
 	# a link
@@ -1077,8 +1099,8 @@ sub process_dafile($$)
 	if ($da_renamed)
 	{
 		# Need to rename empty data file to workaround
-	        # gcov <= 3.2.x bug (Abort)
-		system_no_output(3, "mv", "$da_filename", "$da_filename.ori")
+		# gcov <= 3.2.x bug (Abort)
+		system_no_output(3, "$mv_cmd", "$da_filename", "$da_filename.ori")
 			and die ("ERROR: cannot rename $da_filename\n");
 	}
 
@@ -1088,7 +1110,7 @@ sub process_dafile($$)
 
 	if ($da_renamed)
 	{
-		system_no_output(3, "mv", "$da_filename.ori", "$da_filename")
+		system_no_output(3, "$mv_cmd", "$da_filename.ori", "$da_filename")
 			and die ("ERROR: cannot rename $da_filename.ori");
 	}
 
@@ -1382,11 +1404,58 @@ sub process_dafile($$)
 
 
 #
+# solve_windows_relative_path(path, dir)
+#
+# Solve relative path components of DIR which, if not absolute, resides in PATH.
+#
+sub solve_windows_relative_path($$)
+{
+	my $path = $_[0];
+	my $dir = $_[1];
+	my $uppercase_volume;
+	my $directories;
+	my $filename;
+	my $result;
+
+	# Transform c/d\../e/f\g to Windows style c\d\..\e\f\g
+	$path = File::Spec::Win32->canonpath($path);
+	$dir = File::Spec::Win32->canonpath($dir);
+
+	$result = $dir;
+
+	# Prepend path if not absolute
+	if ($dir !~ /^[A-Za-z]:\\/)
+	{
+		$result = "$path\\$result";
+	}
+
+	# Remove \\
+	$result =~ s/\\\\/\\/g;
+
+	# Remove .
+	$result =~ s/\\\.\\/\\/g;
+	$result =~ s/\\\.$/\\/;
+
+	# Remove trailing \
+	$result =~ s/\\$//g;
+
+	# Solve ..
+	while ($result =~ s/\\[^\\]+\\\.\.\\/\\/)
+	{
+	}
+
+	# Remove preceding ..
+	$result =~ s/^\\\.\.\\/\\/g;
+
+	return $result;
+}
+
+
+#
 # solve_relative_path(path, dir)
 #
 # Solve relative path components of DIR which, if not absolute, resides in PATH.
 #
-
 sub solve_relative_path($$)
 {
 	my $path = $_[0];
@@ -1397,8 +1466,14 @@ sub solve_relative_path($$)
 	my @dirs;			# holds path elements
 	my $result;
 
+	# Handle native win32 path
+	if ($^O =~ /Win/)
+	{
+		return solve_windows_relative_path($path, $dir);
+	}
+
 	# Convert from Windows path to msys path
-	if( $^O eq "msys" )
+	if ($^O eq "msys")
 	{
 		# search for a windows drive letter at the beginning
 		($volume, $directories, $filename) = File::Spec::Win32->splitpath( $dir );
@@ -1563,6 +1638,17 @@ sub solve_ambiguous_match($$$)
 
 sub split_filename($)
 {
+	# Handle native win32 path
+	if ($^O =~ /Win/)
+	{
+		my @path_components = split('\\\\', $_[0]);
+		my @file_components = split('\.', pop(@path_components));
+		my $extension = pop(@file_components);
+
+		return (join("\\",@path_components), join(".",@file_components),
+				$extension);
+	}
+
 	my @path_components = split('/', $_[0]);
 	my @file_components = split('\.', pop(@path_components));
 	my $extension = pop(@file_components);
@@ -2084,9 +2170,9 @@ sub system_no_output($@)
 	($mode & 2) && open(OLD_STDERR, ">>&", "STDERR");
 
 	# Redirect to /dev/null
-	($mode & 1) && open(STDOUT, ">", "/dev/null");
-	($mode & 2) && open(STDERR, ">", "/dev/null");
- 
+	($mode & 1) && open(STDOUT, ">", "$null_redirect");
+	($mode & 2) && open(STDERR, ">", "$null_redirect");
+
 	debug("system(".join(' ', @_).")\n");
 	system(@_);
 	$result = $?;
