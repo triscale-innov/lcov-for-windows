@@ -1,3 +1,26 @@
+These are specific instructions for installation and use on Windows
+platforms. The original README file follows.
+
+
+Installation on Windows
+-----------------------
+
+1. Install a perl distribution, such as Strawberry Perl (http://strawberryperl.com/)
+2. Clone this repository somewhere on the system
+3. Add the "bin/" directory to the `Path` environment variable in Windows
+
+
+Usage on Windows
+----------------
+
+Usage is the same as on linux, except that `genhtml.cmd` should be called
+instead of plain `genhtml`.
+
+
+
+
+Here follows the original README file:
+
 -------------------------------------------------
 - README file for the LTP GCOV extension (LCOV) -
 - Last changes: 2014-06-18                      -
