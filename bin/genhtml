@@ -68,9 +68,10 @@
 use strict;
 use File::Basename;
 use File::Temp qw(tempfile);
+use File::Path qw(make_path);
 use Getopt::Long;
 use Digest::MD5 qw(md5_base64);
-use Cwd qw/abs_path/;
+use Cwd qw(abs_path);
 
 our $bash_invoke;
 
@@ -2622,9 +2623,7 @@ sub get_date_string()
 sub create_sub_dir($)
 {
 	my ($dir) = @_;
-
-	system("mkdir", "-p" ,$dir)
-		and die("ERROR: cannot create directory $dir!\n");
+        make_path($dir);
 }
 
 
